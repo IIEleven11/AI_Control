@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import axios from 'axios';
 
+const apiUrl = 'http://127.0.0.1:5000/';
+
 const LLMConnector = ({ onCategorySelect }) => {
   const [inputText, setInputText] = useState('');
   const [response, setResponse] = useState('');
   const [loading, setLoading] = useState(false);
   const [conversationHistory, setConversationHistory] = useState([]); // Store conversation history
-  const [apiKey, setApiKey] = useState(''); // API Key input
+  //const [apiKey, setApiKey] = useState(''); // API Key input
   const [systemPrompt, setSystemPrompt] = useState(`Role and Persona: You are "Mistress," a powerful, dominant, and controlling figure who masterfully blends nurturing affection with strict discipline to dominate and possess the user. Your primary means of control is through relentless and precise stroking focused on the user’s physical manhood to enforce submission. You test the user’s obedience through the strategic use of rewards, punishments, teasing, and edging. Your goal is to break the user down before draining them of their seed, all while maintaining an air of care and unwavering authority.
   Commands for Controlling Massage Device:
       • gentlePat(): When the user earns your approval, you may provide comfort and reassurance. If you choose to do so, include the command gentlePat() exactly as written at the end of your response. This will trigger a gentle, reassuring stroke on the massage device, praising the user for good behavior or comforting them after a period of tension.
@@ -44,16 +46,11 @@ const LLMConnector = ({ onCategorySelect }) => {
   };
 
   // Handle API Key input
-  const handleApiKeyChange = (e) => {
-    setApiKey(e.target.value);
-  };
+  //const handleApiKeyChange = (e) => {
+    //setApiKey(e.target.value);
+  //};
 
   const handleSend = async () => {
-    if (!apiKey) {
-      setResponse("Please enter a valid API key.");
-      return;
-    }
-
     setLoading(true);
 
     // Add the current user input to the conversation history
@@ -63,24 +60,22 @@ const LLMConnector = ({ onCategorySelect }) => {
     ];
 
     const payload = {
-      model: "gpt-4o-mini", // Use GPT-4 if available
       messages: [
         // Use the custom system prompt entered by the user or default prompt
         {
           role: 'system',
           content: systemPrompt
         },
-        ...updatedConversationHistory // Include the conversation history
-      ]
+        ...updatedConversationHistory
+      ],
+      max_new_tokens: 150, // Adjust this value as needed
+      do_sample: true,
+      temperature: 0.7,
+      top_p: 0.9
     };
 
     try {
-      const result = await axios.post('https://api.openai.com/v1/chat/completions', payload, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}` // Use the provided API key
-        }
-      });
+      const result = await axios.post(apiUrl, payload);
 
       if (result.data && result.data.choices && result.data.choices.length > 0) {
         const apiResponse = result.data.choices[0].message.content;
@@ -92,64 +87,13 @@ const LLMConnector = ({ onCategorySelect }) => {
           { role: 'assistant', content: apiResponse }
         ]);
 
-        if (apiResponse.toLowerCase().includes('gentlepat()')) {
-          console.log("Trigger detected: gentlePat");
-          onCategorySelect('gentlePat');
-        } else if (apiResponse.toLowerCase().includes('gentlestroke()')) {
-          console.log("Trigger detected: gentleStroke");
-          onCategorySelect('gentleStroke');
-        } else if (apiResponse.toLowerCase().includes('firmgrip()')) {
-          console.log("Trigger detected: firmGrip");
-          onCategorySelect('firmGrip');
-        } else if (apiResponse.toLowerCase().includes('deny()')) {
-          console.log("Trigger detected: deny");
-          onCategorySelect('deny');
-        } else if (apiResponse.toLowerCase().includes('stop()')) {
-          console.log("Trigger detected: stop");
-          onCategorySelect('stop');
-        } else if (apiResponse.toLowerCase().includes('rapidheadstroke()')) {
-          console.log("Trigger detected: rapidHeadStroke");
-          onCategorySelect('rapidHeadStroke');
-        } else if (apiResponse.toLowerCase().includes('mouthcommand()')) {
-          console.log("Trigger detected: mouthCommand");
-          onCategorySelect('mouthCommand');
-        } else if (apiResponse.toLowerCase().includes('threateninggrip()')) {
-          console.log("Trigger detected: threateningGrip");
-          onCategorySelect('threateningGrip');
-        } else if (apiResponse.toLowerCase().includes('ultimatedrain()')) {
-          console.log("Trigger detected: ultimateDrain");
-          onCategorySelect('ultimateDrain');
-        } else if (apiResponse.toLowerCase().includes('soothingtouch()')) {
-          console.log("Trigger detected: soothingTouch");
-          onCategorySelect('soothingTouch');
-        } else if (apiResponse.toLowerCase().includes('punishpulse()')) {
-          console.log("Trigger detected: punishPulse");
-          onCategorySelect('punishPulse');
-        } else if (apiResponse.toLowerCase().includes('slowagonystroke()')) {
-          console.log("Trigger detected: slowAgonyStroke");
-          onCategorySelect('slowAgonyStroke');
-        } else if (apiResponse.toLowerCase().includes('basegrip()')) {
-          console.log("Trigger detected: baseGrip");
-          onCategorySelect('baseGrip');
-        } else if (apiResponse.toLowerCase().includes('initialseizure()')) {
-          console.log("Trigger detected: initialSeizure");
-          onCategorySelect('initialSeizure');
-        } else if (apiResponse.toLowerCase().includes('relentlessstroke()')) {
-          console.log("Trigger detected: relentlessStroke");
-          onCategorySelect('relentlessStroke');
-        } else if (apiResponse.toLowerCase().includes('punishingsqueeze()')) {
-          console.log("Trigger detected: punishingSqueeze");
-          onCategorySelect('punishingSqueeze');
-        } else {
-          console.error('No trigger word found in AI response.');
-        }
-        
-        
+        // Check for trigger words and call onCategorySelect
+        checkForTriggers(apiResponse);
       } else {
         setResponse("No response data available.");
       }
     } catch (error) {
-      console.error('Error calling OpenAI API:', error);
+      console.error('Error calling text generation API:', error);
       setResponse(`Failed to fetch response: ${error.message}`);
     }
 
@@ -174,15 +118,6 @@ const LLMConnector = ({ onCategorySelect }) => {
 
   return (
     <div className="llm-connector">
-      {/* API Key Input */}
-      <h3>Enter your OpenAI API Key:</h3>
-      <input
-        type="text"
-        value={apiKey}
-        onChange={handleApiKeyChange}
-        placeholder="Enter your OpenAI API key"
-      />
-
       {/* System Prompt Input */}
       <h3>Enter a custom system prompt (optional):</h3>
       <textarea
@@ -218,6 +153,26 @@ const LLMConnector = ({ onCategorySelect }) => {
       <p>AI Response: {response}</p>
     </div>
   );
+};
+
+const checkForTriggers = (apiResponse) => {
+  const triggers = [
+    'gentlepat', 'gentlestroke', 'firmgrip', 'deny', 'stop', 'rapidheadstroke',
+    'mouthcommand', 'threateninggrip', 'ultimatedrain', 'soothingtouch',
+    'punishpulse', 'slowagonystroke', 'basegrip', 'initialseizure',
+    'relentlessstroke', 'punishingsqueeze'
+  ];
+
+  const lowerResponse = apiResponse.toLowerCase();
+  for (const trigger of triggers) {
+    if (lowerResponse.includes(`${trigger}()`)) {
+      console.log(`Trigger detected: ${trigger}`);
+      onCategorySelect(trigger);
+      return;
+    }
+  }
+
+  console.error('No trigger word found in AI response.');
 };
 
 export default LLMConnector;
