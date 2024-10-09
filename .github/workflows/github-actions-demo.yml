@@ -1,0 +1,99 @@
+name: Integrate AI_Control Functionality
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_file:
+        description: 'File path in brain-dance repo to update'
+        required: true
+
+jobs:
+  integrate-code:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout brain-dance repo
+        uses: actions/checkout@v2
+        with:
+          repository: IIEleven11/brain-dance
+          
+      - name: Checkout AI_Control repo
+        uses: actions/checkout@v2
+        with:
+          repository: IIEleven11/AI_Control
+          path: ai-control-repo
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v2
+        with:
+          node-version: '14'
+
+      - name: Install dependencies
+        run: |
+          npm install axios
+
+      - name: Run AI integration
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          node <<EOF
+          const fs = require('fs');
+          const axios = require('axios');
+
+          const aiControlFiles = [
+            'static/js/App.js',
+            'static/js/main.1a7a07dd.js',
+            'static/js/components/AI.js',
+            'static/js/components/HandyFunctions.js',
+            'static/js/components/Hardcode.js'
+          ];
+
+          const sourceCode = aiControlFiles.map(file => {
+            const content = fs.readFileSync(`ai-control-repo/${file}`, 'utf8');
+            return `// ${file}\n${content}`;
+          }).join('\n\n');
+
+          const targetCode = fs.readFileSync(process.env.INPUT_TARGET_FILE, 'utf8');
+
+          const prompt = `
+          Here's the source code from AI_Control with functionality to integrate:
+          ${sourceCode}
+
+          Here's the target code in brain-dance where we want to add the functionality:
+          ${targetCode}
+
+          Please modify the target code to include the handy implementation from the source code.
+          Focus on integrating reusable functions and components.
+          Return only the modified target code.
+          `;
+
+          async function generateCode() {
+            try {
+              const response = await axios.post('https://api.openai.com/v1/chat/completions', {
+                prompt: prompt,
+                max_tokens: 8192,
+                temperature: 0.2
+              }, {
+                headers: {
+                  'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+                  'Content-Type': 'application/json'
+                }
+              });
+
+              const modifiedCode = response.data.choices[0].text.trim();
+              fs.writeFileSync(process.env.INPUT_TARGET_FILE, modifiedCode);
+            } catch (error) {
+              console.error('Error generating code:', error);
+              process.exit(1);
+            }
+          }
+
+          generateCode();
+          EOF
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v3
+        with:
+          commit-message: Add functionality from AI_Control
+          title: 'AI-generated: Integrate functionality from AI_Control'
+          body: 'This PR was automatically generated to integrate functionality from AI_Control.'
+          branch: ai-integration
